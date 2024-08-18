@@ -23,6 +23,7 @@ from constants import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class TikTokAPI:
     def __init__(self):
         self.client_key, self.client_secret = self.get_env_variables()
@@ -50,7 +51,9 @@ class TikTokAPI:
         Make API calls using exponential backoff when throttled.
         """
         for attempt in range(max_retries):
-            response = requests.post(url, headers=headers, params=params, data=data, json=json)
+            response = requests.post(
+                url, headers=headers, params=params, data=data, json=json
+            )
             if response.status_code == HTTP_STATUS_OK:
                 # TikTok API sometimes returns a 200 but with errors
                 response_json = response.json()
@@ -62,7 +65,9 @@ class TikTokAPI:
                 HTTP_STATUS_SERVICE_UNAVAILABLE,
             ]:
                 wait_time = 2**attempt  # Exponential backoff
-                logger.warning(f"Rate limit exceeded. Retrying in {wait_time} seconds...")
+                logger.warning(
+                    f"Rate limit exceeded. Retrying in {wait_time} seconds..."
+                )
                 time.sleep(wait_time)
             else:
                 response.raise_for_status()  # Raise other HTTP errors
@@ -173,7 +178,9 @@ class TikTokAPI:
             response = self._request_with_retries(url, headers, query_params, json=body)
             return response.get("data", {})
         except Exception as e:
-            logger.error(f"Failed to get user details for user {username} due to error: {e}")
+            logger.error(
+                f"Failed to get user details for user {username} due to error: {e}"
+            )
             return {}
 
     def get_video_comments(self, video_id):
@@ -202,7 +209,9 @@ class TikTokAPI:
                     body = {"video_id": video_id, "max_count": 100}
 
                 logger.info("Calling TikTok API to retrieve video comments.")
-                response = self._request_with_retries(url, headers, query_params, json=body)
+                response = self._request_with_retries(
+                    url, headers, query_params, json=body
+                )
                 new_comments = response.get("data", {}).get("comments", [])
                 cursor = response.get("data", {}).get("cursor", None)
                 has_more = response.get("data", {}).get("has_more", False)
@@ -210,5 +219,7 @@ class TikTokAPI:
                 comments.extend(new_comments)
             return response.get("data", {}).get("comments", [])
         except Exception as e:
-            logger.error(f"Failed to get video comments for video with ID {video_id} due to error: {e}")
+            logger.error(
+                f"Failed to get video comments for video with ID {video_id} due to error: {e}"
+            )
             return []
