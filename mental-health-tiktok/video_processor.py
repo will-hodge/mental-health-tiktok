@@ -53,7 +53,7 @@ class VideoProcessor:
 
     def create_video_json(self, video, comments, user, tag, today):
         """
-        Create a JSON object containing details about a video, its comments, 
+        Create a JSON object containing details about a video, its comments,
         and the associated user information.
         """
         video_and_user_details = {

@@ -165,7 +165,6 @@ class TikTokAPI:
             "fields": "display_name,bio_description,avatar_url,is_verified,"
             "follower_count,following_count,likes_count,video_count"
         }
-        
 
         body = {"username": username}
 
