@@ -25,5 +25,15 @@ ERROR_KEY = "error"
 ERROR_DESCRIPTION_KEY = "error_description"
 
 # Other
+VIDEO_URL_FORMAT = "https://www.tiktok.com/@{username}/video/{video_id}"
 DATE_FORMAT = "%Y-%m-%d"
 EXPORT_FOLDER = "video_files"
+
+HASHTAGS = [
+    "suicideprevention",
+    "suicideawareness",
+    "suiawareness",
+    "shawareness",
+    "shrecovering",
+    "shtok",
+]

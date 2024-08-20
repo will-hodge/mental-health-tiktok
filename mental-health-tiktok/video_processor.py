@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from constants import VIDEO_URL_FORMAT
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -13,8 +14,12 @@ class VideoProcessor:
         return video.get("id"), video.get("username")
 
     def parse_video_details(self, video):
+        video_id = video.get("id")
+        username = video.get("username")
+        video_url = VIDEO_URL_FORMAT.format(username=username, video_id=video_id)
         return {
-            "video_id": video.get("id"),
+            "video_id": video_id,
+            "video_url": video_url,
             "description": video.get("video_description"),
             "hashtags": video.get("hashtag_names"),
             "date_posted": self.format_date(video.get("create_time")),
@@ -23,6 +28,7 @@ class VideoProcessor:
             "comment_count": video.get("comment_count"),
             "view_count": video.get("view_count"),
             "favorites_count": video.get("favorites_count"),
+            "voice_to_text": video.get("voice_to_text"),
         }
 
     def parse_user_details(self, user, video):

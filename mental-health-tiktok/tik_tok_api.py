@@ -73,8 +73,10 @@ class TikTokAPI:
                 response.raise_for_status()  # Raise other HTTP errors
         raise Exception("Max retries exceeded")
 
-    # Generalized error handling for API requests
     def handle_api_error(self, response_json):
+        """
+        Handle API errors.
+        """
         if ERROR_KEY in response_json and response_json[ERROR_KEY].get("code") != "ok":
             error = response_json.get(ERROR_KEY)
             error_description = response_json.get(ERROR_DESCRIPTION_KEY)

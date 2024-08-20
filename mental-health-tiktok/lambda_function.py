@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from video_processor import VideoProcessor
 from tik_tok_api import TikTokAPI
-from constants import DATE_FORMAT, EXPORT_FOLDER
+from constants import DATE_FORMAT, EXPORT_FOLDER, HASHTAGS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,14 +14,7 @@ class LambdaHandler:
     def __init__(self):
         self.video_processor = VideoProcessor(DATE_FORMAT)
         self.tiktok_api = TikTokAPI()
-        self.hashtags = [
-            "suicideprevention",
-            "suicideawareness",
-            "suiawareness",
-            "shawareness",
-            "shrecovering",
-            "shtok",
-        ]
+        self.hashtags = HASHTAGS
 
     def export_video_details_to_file(self, filepath, username, id, video):
         """
