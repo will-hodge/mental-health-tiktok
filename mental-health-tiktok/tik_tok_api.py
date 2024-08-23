@@ -212,8 +212,8 @@ class TikTokAPI:
             "parent_comment_id, create_time",
         }
 
+        comments = []
         try:
-            comments = []
             cursor = None
             has_more = True
             while has_more:
@@ -236,4 +236,4 @@ class TikTokAPI:
             logger.error(
                 f"Failed to get video comments for video with ID {video_id} due to error: {e}"
             )
-            return []
+            return comments
