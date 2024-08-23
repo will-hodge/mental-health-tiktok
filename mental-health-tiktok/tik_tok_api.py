@@ -27,7 +27,11 @@ logger = logging.getLogger(__name__)
 class TikTokAPI:
     def __init__(self):
         self.client_key, self.client_secret = self.get_env_variables()
+        self.api_call_count = 0
         self.access_token = self.get_access_token()
+
+    def _increment_api_call_count(self):
+        self.api_call_count += 1
 
     def get_env_variables(self):
         """
@@ -45,32 +49,40 @@ class TikTokAPI:
         return client_key, client_secret
 
     def _request_with_retries(
-        self, url, headers, params=None, data=None, json=None, max_retries=5
+        self, url, headers, params=None, data=None, json=None, max_retries=10
     ):
         """
         Make API calls using exponential backoff when throttled.
         """
         for attempt in range(max_retries):
-            response = requests.post(
-                url, headers=headers, params=params, data=data, json=json
-            )
-            if response.status_code == HTTP_STATUS_OK:
-                # TikTok API sometimes returns a 200 but with errors
-                response_json = response.json()
-                self.handle_api_error(response_json)
-                return response_json
-            elif response.status_code in [
-                HTTP_STATUS_TOO_MANY_REQUESTS,
-                HTTP_STATUS_INTERNAL_SERVER_ERROR,
-                HTTP_STATUS_SERVICE_UNAVAILABLE,
-            ]:
-                wait_time = 2**attempt  # Exponential backoff
-                logger.warning(
-                    f"Rate limit exceeded. Retrying in {wait_time} seconds..."
+            self._increment_api_call_count()
+            try:
+                response = requests.post(
+                    url, headers=headers, params=params, data=data, json=json
+                )
+                if response.status_code == HTTP_STATUS_OK:
+                    # TikTok API sometimes returns a 200 but with errors
+                    response_json = response.json()
+                    self.handle_api_error(response_json)
+                    return response_json
+                elif response.status_code in [
+                    HTTP_STATUS_TOO_MANY_REQUESTS,
+                    HTTP_STATUS_INTERNAL_SERVER_ERROR,
+                    HTTP_STATUS_SERVICE_UNAVAILABLE,
+                ]:
+                    wait_time = 2**attempt  # Exponential backoff
+                    logger.warning(
+                        f"Rate limit exceeded. Retrying in {wait_time} seconds..."
+                    )
+                    time.sleep(wait_time)
+                else:
+                    response.raise_for_status()  # Raise other HTTP errors
+            except ConnectionError as e:
+                wait_time = 2**attempt
+                logging.error(
+                    f"Connection error: {e}. Retrying in {wait_time} seconds..."
                 )
                 time.sleep(wait_time)
-            else:
-                response.raise_for_status()  # Raise other HTTP errors
         raise Exception("Max retries exceeded")
 
     def handle_api_error(self, response_json):
@@ -108,7 +120,7 @@ class TikTokAPI:
             return response.get("access_token")
         except Exception as e:
             logger.error(f"Failed to get access token due to error: {e}")
-            return None
+            raise e
 
     def get_videos(self, hashtag, start_date, end_date, max_count):
         """

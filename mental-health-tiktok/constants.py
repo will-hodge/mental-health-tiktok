@@ -28,6 +28,7 @@ ERROR_DESCRIPTION_KEY = "error_description"
 VIDEO_URL_FORMAT = "https://www.tiktok.com/@{username}/video/{video_id}"
 DATE_FORMAT = "%Y-%m-%d"
 EXPORT_FOLDER = "video_files"
+EXPORT_SUMMARY_FILE = "summary.json"
 
 HASHTAGS = [
     "suicideprevention",

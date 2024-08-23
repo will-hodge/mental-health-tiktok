@@ -1,10 +1,11 @@
 import json
 import logging
 import os
+import time
 from datetime import datetime
 from video_processor import VideoProcessor
 from tik_tok_api import TikTokAPI
-from constants import DATE_FORMAT, EXPORT_FOLDER, HASHTAGS
+from constants import DATE_FORMAT, EXPORT_SUMMARY_FILE, EXPORT_FOLDER, HASHTAGS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,20 +16,38 @@ class LambdaHandler:
         self.video_processor = VideoProcessor(DATE_FORMAT)
         self.tiktok_api = TikTokAPI()
         self.hashtags = HASHTAGS
+        self.summary = {
+            "videos": {hashtag: 0 for hashtag in HASHTAGS},
+            "total_api_calls": 0,
+        }
 
-    def export_video_details_to_file(self, filepath, username, id, video):
+    def update_summary(self, hashtag, count):
+        self.summary["videos"][hashtag] = count
+
+    def export_summary(self, duration):
+        self.summary["total_api_calls"] = self.tiktok_api.api_call_count
+        self.summary["duration"] = f"{duration:.2f} seconds"
+        # sum all video counts
+        videos = self.summary["videos"]
+        videos["total"] = sum(videos.values())
+        filename = os.path.join(EXPORT_FOLDER, EXPORT_SUMMARY_FILE)
+        with open(filename, "w") as file:
+            json.dump(self.summary, file, ensure_ascii=False, indent=4)
+
+    def export_video_details_to_file(self, filepath, id, video):
         """
         Create a JSON file for each video.
         """
-        video_folder = os.path.join(filepath, f"{username}_{id}")
+        video_folder = os.path.join(filepath, str(id))
         os.makedirs(video_folder, exist_ok=True)
-        filename = os.path.join(video_folder, f"{username}_{id}.json")
+        filename = os.path.join(video_folder, f"{id}.json")
         with open(filename, "w") as file:
             json.dump(video, file, ensure_ascii=False, indent=4)
-        logger.info(f"Created {username}_{id}.json")
+        logger.info(f"Created {id}.json.")
 
     def process_request(self, event, context):
         logger.info("Entered lambda handler")
+        export_start_time = time.time()
         # TODO: process the timestamps if we're splitting up the days by lambda invocation
 
         start_date = (
@@ -54,13 +73,16 @@ class LambdaHandler:
                 video_details = self.video_processor.create_video_json(
                     video, video_comments, user_details, hashtag, today
                 )
-                self.export_video_details_to_file(
-                    filepath, username, video_id, video_details
-                )
+                self.export_video_details_to_file(filepath, video_id, video_details)
 
+            num_videos = len(videos)
             logger.info(
-                f"Processed {len(videos)} video{'s' if len(videos) != 1 else ''} for #{hashtag}."
+                f"Processed {num_videos} video{'s' if num_videos != 1 else ''} for #{hashtag}."
             )
+            self.update_summary(hashtag, num_videos)
+        export_end_time = time.time()
+        export_duration = export_end_time - export_start_time
+        self.export_summary(export_duration)
         return True
 
 
