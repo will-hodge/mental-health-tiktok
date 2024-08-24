@@ -23,6 +23,7 @@ class VideoProcessor:
             "description": video.get("video_description"),
             "hashtags": video.get("hashtag_names"),
             "date_posted": self.format_date(video.get("create_time")),
+            "region_code": video.get("region_code"),
             "like_count": video.get("like_count"),
             "share_count": video.get("share_count"),
             "comment_count": video.get("comment_count"),

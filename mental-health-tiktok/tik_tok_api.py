@@ -7,12 +7,13 @@ from constants import (
     CACHE_CONTROL,
     CLIENT_KEY,
     CLIENT_SECRET,
-    ERROR_DESCRIPTION_KEY,
     ERROR_KEY,
+    ERROR_MESSAGE_KEY,
     HTTP_STATUS_INTERNAL_SERVER_ERROR,
     HTTP_STATUS_OK,
     HTTP_STATUS_TOO_MANY_REQUESTS,
     HTTP_STATUS_SERVICE_UNAVAILABLE,
+    RESPONSE_CODE_KEY,
     TOKEN_ENDPOINT,
     USER_ENDPOINT,
     URL_ENCODED_CONTENT_TYPE,
@@ -49,7 +50,7 @@ class TikTokAPI:
         return client_key, client_secret
 
     def _request_with_retries(
-        self, url, headers, params=None, data=None, json=None, max_retries=10
+        self, url, headers, params=None, data=None, json=None, max_retries=5
     ):
         """
         Make API calls using exponential backoff when throttled.
@@ -70,13 +71,14 @@ class TikTokAPI:
                     HTTP_STATUS_INTERNAL_SERVER_ERROR,
                     HTTP_STATUS_SERVICE_UNAVAILABLE,
                 ]:
-                    wait_time = 2**attempt  # Exponential backoff
+                    # Exponential backoff
+                    wait_time = 2**attempt
                     logger.warning(
                         f"Rate limit exceeded. Retrying in {wait_time} seconds..."
                     )
                     time.sleep(wait_time)
                 else:
-                    response.raise_for_status()  # Raise other HTTP errors
+                    self.handle_api_error(response.json())
             except ConnectionError as e:
                 wait_time = 2**attempt
                 logging.error(
@@ -89,10 +91,13 @@ class TikTokAPI:
         """
         Handle API errors.
         """
-        if ERROR_KEY in response_json and response_json[ERROR_KEY].get("code") != "ok":
-            error = response_json.get(ERROR_KEY)
-            error_description = response_json.get(ERROR_DESCRIPTION_KEY)
-            message = f"API error: {error}. Description: {error_description}"
+        if (
+            ERROR_KEY in response_json
+            and response_json[ERROR_KEY].get(RESPONSE_CODE_KEY) != "ok"
+        ):
+            error = response_json.get(ERROR_KEY).get(RESPONSE_CODE_KEY)
+            error_message = response_json.get(ERROR_KEY).get(ERROR_MESSAGE_KEY)
+            message = f"TikTok API error: {error}. Message: {error_message}"
             logger.error(message)
             raise Exception(message)
 
@@ -140,35 +145,49 @@ class TikTokAPI:
             "effect_ids,playlist_id,voice_to_text"
         }
 
-        body = {
-            "query": {
-                "and": [
-                    {
-                        "operation": "IN",
-                        "field_name": "region_code",
-                        "field_values": ["US"],
-                    },
-                    {
-                        "operation": "EQ",
-                        "field_name": "hashtag_name",
-                        "field_values": [hashtag],
-                    },
-                ]
-            },
-            "start_date": start_date,
-            "end_date": end_date,
-            "max_count": max_count,
-        }
-
+        videos = []
         try:
-            logger.info("Calling TikTok API to retrieve videos.")
-            response = self._request_with_retries(url, headers, query_params, json=body)
-            return response.get("data", {}).get("videos", [])
-        except requests.exceptions.HTTPError as http_err:
-            logger.error(f"HTTP error occurred: {http_err}")
-        except requests.exceptions.RequestException as req_err:
-            logger.error(f"Request error occurred: {req_err}")
-        return []
+            cursor = 0
+            search_id = ""
+            has_more = True
+            while has_more:
+                body = {
+                    "query": {
+                        "and": [
+                            {
+                                "operation": "EQ",
+                                "field_name": "hashtag_name",
+                                "field_values": [hashtag],
+                            },
+                        ]
+                    },
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "max_count": max_count,
+                    "search_id": search_id,
+                    "cursor": cursor,
+                }
+
+                logger.info("Calling TikTok API to retrieve videos.")
+                response = self._request_with_retries(
+                    url, headers, query_params, json=body
+                )
+                response_data = response.get("data", {})
+                new_videos = response_data.get("videos", [])
+                cursor = response_data.get("cursor", None)
+                has_more = response_data.get("has_more", False)
+                search_id = response_data.get("search_id", search_id)
+
+                logger.info(f"Retrieved {len(new_videos)} videos for #{hashtag}.")
+                logger.info(
+                    f"has_more: {has_more}, search_id: {search_id}, cursor: {cursor}"
+                )
+                videos.extend(new_videos)
+                return videos  # TODO: remove
+        except Exception as e:
+            logger.error(f"Failed to get videos for #{hashtag} due to error: {e}")
+        finally:
+            return videos
 
     def get_user_details(self, username):
         """
@@ -217,23 +236,31 @@ class TikTokAPI:
             cursor = None
             has_more = True
             while has_more:
-                if cursor:
-                    body = {"video_id": video_id, "max_count": 100, "cursor": cursor}
-                else:
-                    body = {"video_id": video_id, "max_count": 100}
+                if cursor is not None:
+                    cursor = int(cursor)
+
+                body = {
+                    "video_id": video_id,
+                    "max_count": 100,
+                    "cursor": cursor,
+                }
 
                 logger.info("Calling TikTok API to retrieve video comments.")
                 response = self._request_with_retries(
                     url, headers, query_params, json=body
                 )
-                new_comments = response.get("data", {}).get("comments", [])
-                cursor = response.get("data", {}).get("cursor", None)
-                has_more = response.get("data", {}).get("has_more", False)
+                response_data = response.get("data", {})
+                new_comments = response_data.get("comments", [])
+                cursor = response_data.get("cursor", None)
+                has_more = response_data.get("has_more", False)
+
+                logger.info(f"Retrieved {len(new_comments)} comments for {video_id}.")
+                logger.info(f"has_more: {has_more}, cursor: {cursor}")
 
                 comments.extend(new_comments)
-            return response.get("data", {}).get("comments", [])
         except Exception as e:
             logger.error(
                 f"Failed to get video comments for video with ID {video_id} due to error: {e}"
             )
+        finally:
             return comments

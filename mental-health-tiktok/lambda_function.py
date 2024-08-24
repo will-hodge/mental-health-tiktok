@@ -3,9 +3,17 @@ import logging
 import os
 import time
 from datetime import datetime
-from video_processor import VideoProcessor
+from s3_client import S3Client
 from tik_tok_api import TikTokAPI
-from constants import DATE_FORMAT, EXPORT_SUMMARY_FILE, EXPORT_FOLDER, HASHTAGS
+from video_processor import VideoProcessor
+from constants import (
+    AWS_REGION,
+    DATE_FORMAT,
+    EXPORT_SUMMARY_FILE,
+    EXPORT_FOLDER,
+    HASHTAGS,
+    S3_BUCKET_NAME,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,11 +23,14 @@ class LambdaHandler:
     def __init__(self):
         self.video_processor = VideoProcessor(DATE_FORMAT)
         self.tiktok_api = TikTokAPI()
+        self.s3_client = S3Client(S3_BUCKET_NAME)
         self.hashtags = HASHTAGS
         self.summary = {
             "videos": {hashtag: 0 for hashtag in HASHTAGS},
             "total_api_calls": 0,
         }
+        self.today = datetime.now().strftime(DATE_FORMAT)
+        self.is_lambda = os.environ.get("AWS_EXECUTION_ENV") is not None
 
     def update_summary(self, hashtag, count):
         self.summary["videos"][hashtag] = count
@@ -30,19 +41,28 @@ class LambdaHandler:
         # sum all video counts
         videos = self.summary["videos"]
         videos["total"] = sum(videos.values())
-        filename = os.path.join(EXPORT_FOLDER, EXPORT_SUMMARY_FILE)
-        with open(filename, "w") as file:
-            json.dump(self.summary, file, ensure_ascii=False, indent=4)
+        filename = f"{EXPORT_FOLDER}/{EXPORT_SUMMARY_FILE}"
+        summary_json = json.dumps(self.summary, ensure_ascii=False, indent=4)
+        # only store file when running locally
+        if not self.is_lambda:
+            with open(filename, "w") as file:
+                json.dump(self.summary, file, ensure_ascii=False, indent=4)
+        self.s3_client.upload_json(f"{self.today}/{filename}", summary_json)
+        logger.info(f"Created {EXPORT_SUMMARY_FILE}.")
 
-    def export_video_details_to_file(self, filepath, id, video):
+    def export_video_details(self, hashtag, id, video):
         """
         Create a JSON file for each video.
         """
-        video_folder = os.path.join(filepath, str(id))
+        video_folder = f"{EXPORT_FOLDER}/{hashtag}/{id}"
         os.makedirs(video_folder, exist_ok=True)
-        filename = os.path.join(video_folder, f"{id}.json")
-        with open(filename, "w") as file:
-            json.dump(video, file, ensure_ascii=False, indent=4)
+        filename = f"{video_folder}/{id}.json"
+        video_json = json.dumps(video, ensure_ascii=False, indent=4)
+        # only store file when running locally
+        if not self.is_lambda:
+            with open(filename, "w") as file:
+                json.dump(video, file, ensure_ascii=False, indent=4)
+        self.s3_client.upload_json(f"{self.today}/{filename}", video_json)
         logger.info(f"Created {id}.json.")
 
     def process_request(self, event, context):
@@ -54,12 +74,8 @@ class LambdaHandler:
             "20230101"  # TODO: batch dates efficiently given we want an entire year
         )
         end_date = "20230102"
-        today = datetime.now().strftime(DATE_FORMAT)
 
         for hashtag in self.hashtags:
-            filepath = os.path.join(EXPORT_FOLDER, hashtag)
-            os.makedirs(filepath, exist_ok=True)
-            # Retrieve videos
             max_video_count = 100
             videos = self.tiktok_api.get_videos(
                 hashtag, start_date, end_date, max_video_count
@@ -71,9 +87,9 @@ class LambdaHandler:
                 user_details = self.tiktok_api.get_user_details(username)
                 video_comments = self.tiktok_api.get_video_comments(video_id)
                 video_details = self.video_processor.create_video_json(
-                    video, video_comments, user_details, hashtag, today
+                    video, video_comments, user_details, hashtag, self.today
                 )
-                self.export_video_details_to_file(filepath, video_id, video_details)
+                self.export_video_details(hashtag, video_id, video_details)
 
             num_videos = len(videos)
             logger.info(
