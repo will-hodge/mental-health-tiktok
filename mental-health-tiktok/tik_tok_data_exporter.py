@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from s3_client import S3Client
 from tik_tok_api import TikTokAPI
 from video_processor import VideoProcessor
@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class LambdaHandler:
+class TikTokDataHandler:
     def __init__(self):
         self.video_processor = VideoProcessor(DATE_FORMAT)
         self.tiktok_api = TikTokAPI()
@@ -58,6 +58,7 @@ class LambdaHandler:
         os.makedirs(video_folder, exist_ok=True)
         filename = f"{video_folder}/{id}.json"
         video_json = json.dumps(video, ensure_ascii=False, indent=4)
+
         # only store file when running locally
         if not self.is_lambda:
             with open(filename, "w") as file:
@@ -65,49 +66,58 @@ class LambdaHandler:
         self.s3_client.upload_json(f"{self.today}/{filename}", video_json)
         logger.info(f"Created {id}.json.")
 
-    def process_request(self, event, context):
-        logger.info("Entered lambda handler")
+    def process_request(self):
+        logger.info("Entered TikTokDataExporter")
         export_start_time = time.time()
-        # TODO: process the timestamps if we're splitting up the days by lambda invocation
 
-        start_date = (
-            "20230101"  # TODO: batch dates efficiently given we want an entire year
-        )
-        end_date = "20230102"
+        # define the start and end dates
+        start_date_str = "20240101"  # YYYYMMdd
+        end_date_str = "20240331"  # YYYYMMdd
 
-        for hashtag in self.hashtags:
-            max_video_count = 100
-            videos = self.tiktok_api.get_videos(
-                hashtag, start_date, end_date, max_video_count
-            )
+        # convert strings to datetime objects
+        start_date = datetime.strptime(start_date_str, "%Y%m%d")
+        end_date = datetime.strptime(end_date_str, "%Y%m%d")
 
-            # Process each video
-            for video in videos:
-                video_id, username = self.video_processor.get_video_details(video)
-                user_details = self.tiktok_api.get_user_details(username)
-                video_comments = self.tiktok_api.get_video_comments(video_id)
-                video_details = self.video_processor.create_video_json(
-                    video, video_comments, user_details, hashtag, self.today
+        current_date = start_date
+        while current_date <= end_date:
+            # convert back to string for TikTok API
+            date_str = current_date.strftime("%Y%m%d")
+            for hashtag in self.hashtags:
+                max_video_count = 25
+                videos = self.tiktok_api.get_videos(
+                    hashtag, date_str, date_str, max_video_count
                 )
-                self.export_video_details(hashtag, video_id, video_details)
 
-            num_videos = len(videos)
-            logger.info(
-                f"Processed {num_videos} video{'s' if num_videos != 1 else ''} for #{hashtag}."
-            )
-            self.update_summary(hashtag, num_videos)
+                # process each video
+                for video in videos:
+                    video_id, username, video_comment_count = (
+                        self.video_processor.get_video_details(video)
+                    )
+                    user_details = self.tiktok_api.get_user_details(username)
+                    video_comments = (
+                        self.tiktok_api.get_video_comments(video_id)
+                        if video_comment_count > 0
+                        else []
+                    )
+                    video_details = self.video_processor.create_video_json(
+                        video, video_comments, user_details, hashtag, self.today
+                    )
+                    self.export_video_details(hashtag, video_id, video_details)
+
+                num_videos = len(videos)
+                logger.info(
+                    f"Processed {num_videos} video{'s' if num_videos != 1 else ''} for #{hashtag}."
+                )
+                self.update_summary(hashtag, num_videos)
+            current_date += timedelta(days=1)
+
         export_end_time = time.time()
         export_duration = export_end_time - export_start_time
         self.export_summary(export_duration)
         return True
 
 
-def lambda_handler(event, context):
-    handler = LambdaHandler()
-    return handler.process_request(event, context)
-
-
 # for running locally
 if __name__ == "__main__":
-    handler = LambdaHandler()
-    handler.process_request(None, None)
+    handler = TikTokDataHandler()
+    handler.process_request()

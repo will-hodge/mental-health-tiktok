@@ -61,9 +61,9 @@ class TikTokAPI:
                 response = requests.post(
                     url, headers=headers, params=params, data=data, json=json
                 )
+                response_json = response.json()
                 if response.status_code == HTTP_STATUS_OK:
                     # TikTok API sometimes returns a 200 but with errors
-                    response_json = response.json()
                     self.handle_api_error(response_json)
                     return response_json
                 elif response.status_code in [
@@ -78,7 +78,7 @@ class TikTokAPI:
                     )
                     time.sleep(wait_time)
                 else:
-                    self.handle_api_error(response.json())
+                    self.handle_api_error(response_json)
             except ConnectionError as e:
                 wait_time = 2**attempt
                 logging.error(
@@ -150,7 +150,7 @@ class TikTokAPI:
             cursor = 0
             search_id = ""
             has_more = True
-            while has_more:
+            while has_more and len(videos) < max_count:
                 body = {
                     "query": {
                         "and": [
@@ -166,6 +166,7 @@ class TikTokAPI:
                     "max_count": max_count,
                     "search_id": search_id,
                     "cursor": cursor,
+                    "is_random": True,
                 }
 
                 logger.info("Calling TikTok API to retrieve videos.")
@@ -178,12 +179,15 @@ class TikTokAPI:
                 has_more = response_data.get("has_more", False)
                 search_id = response_data.get("search_id", search_id)
 
-                logger.info(f"Retrieved {len(new_videos)} videos for #{hashtag}.")
+                logger.info(
+                    f"Retrieved {len(new_videos)} video{'s' if len(new_videos) != 1 else ''} for #{hashtag}."
+                )
                 logger.info(
                     f"has_more: {has_more}, search_id: {search_id}, cursor: {cursor}"
                 )
                 videos.extend(new_videos)
-                return videos  # TODO: remove
+                # return videos  # TODO: remove once we figure out pagination issue
+            return videos
         except Exception as e:
             logger.error(f"Failed to get videos for #{hashtag} due to error: {e}")
         finally:

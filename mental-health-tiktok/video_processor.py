@@ -11,7 +11,7 @@ class VideoProcessor:
         self.date_format = date_format
 
     def get_video_details(self, video):
-        return video.get("id"), video.get("username")
+        return video.get("id"), video.get("username"), video.get("comment_count")
 
     def parse_video_details(self, video):
         video_id = video.get("id")
