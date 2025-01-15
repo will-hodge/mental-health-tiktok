@@ -2,7 +2,6 @@ import logging
 from datetime import datetime
 from constants import VIDEO_URL_FORMAT
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

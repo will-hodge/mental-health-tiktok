@@ -2,4 +2,6 @@
 .lambda
 .vscode
 .DS_Store
+.env
+*.log
 mental-health-tiktok/video_files*

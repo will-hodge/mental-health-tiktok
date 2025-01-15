@@ -27,7 +27,7 @@ ERROR_MESSAGE_KEY = "message"
 
 # Other
 VIDEO_URL_FORMAT = "https://www.tiktok.com/@{username}/video/{video_id}"
-DATE_FORMAT = "%Y-%m-%d"
+DATE_FORMAT = "%Y-%m-%d_%H:%M"
 EXPORT_FOLDER = "video_files"
 EXPORT_SUMMARY_FILE = "summary.json"
 S3_BUCKET_NAME = "tik-tok-mental-health-analysis"
