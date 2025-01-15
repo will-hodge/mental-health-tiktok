@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from tik_tok_data_exporter import TikTokDataExporter
 
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
 logging.basicConfig(
     filename=f"export_{timestamp}.log",
     level=logging.INFO,

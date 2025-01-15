@@ -87,7 +87,7 @@ class TikTokDataExporter:
                 user_details = self.tiktok_api.get_user_details(username)
                 video_comments = (
                     self.tiktok_api.get_video_comments(video_id)
-                    if video_comment_count > 0
+                    if video_comment_count is not None and video_comment_count > 0
                     else []
                 )
                 video_details = self.video_processor.create_video_json(

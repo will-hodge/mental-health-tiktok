@@ -73,7 +73,7 @@ class TikTokAPI:
                     # Exponential backoff
                     wait_time = 2**attempt
                     logger.warning(
-                        f"Rate limit exceeded. Retrying in {wait_time} seconds..."
+                        f"Rate limit exceeded. Retrying in {wait_time} seconds... Full response: {response_json}"
                     )
                     time.sleep(wait_time)
                 else:
@@ -96,7 +96,7 @@ class TikTokAPI:
         ):
             error = response_json.get(ERROR_KEY).get(RESPONSE_CODE_KEY)
             error_message = response_json.get(ERROR_KEY).get(ERROR_MESSAGE_KEY)
-            message = f"TikTok API error: {error}. Message: {error_message}"
+            message = f"TikTok API error: {error}. Message: {error_message}. Full response: {response_json}"
             logger.error(message)
             raise Exception(message)
 
